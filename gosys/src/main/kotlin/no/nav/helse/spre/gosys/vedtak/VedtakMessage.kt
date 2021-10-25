@@ -235,7 +235,7 @@ data class VedtakMessage private constructor(
         }
     }
 
-    internal data class DagAcc(
+    internal data class AvvistPeriode(
         val fom: LocalDate,
         var tom: LocalDate,
         val type: String,
@@ -301,18 +301,31 @@ data class VedtakMessage private constructor(
     }
 }
 
-internal fun Iterable<VedtakMessage.IkkeUtbetaltDag>.settSammenIkkeUtbetalteDager(): List<VedtakMessage.DagAcc> =
-    map { VedtakMessage.DagAcc(it.dato, it.dato, it.type, it.begrunnelser) }.fold(listOf()) { akkumulator, avvistDag ->
+internal fun Iterable<VedtakMessage.IkkeUtbetaltDag>.settSammenIkkeUtbetalteDager(): List<VedtakMessage.AvvistPeriode> =
+    map { VedtakMessage.AvvistPeriode(it.dato, it.dato, it.type, it.begrunnelser) }.fold(listOf()) { akkumulator, avvistDag ->
         val sisteInnslag = akkumulator.lastOrNull()
-        if (sisteInnslag != null && ((sisteInnslag.type == avvistDag.type &&
-                    sisteInnslag.begrunnelser.containsAll(avvistDag.begrunnelser) && avvistDag.begrunnelser.containsAll(
-                sisteInnslag.begrunnelser
-            )
-                    ) || (sisteInnslag.type == "Arbeidsdag") && avvistDag.type == "Fridag")
-            && sisteInnslag.tom.plusDays(1) == avvistDag.tom
+        if (sisteInnslag != null
+            && (etterfølgerUtenGap(sisteInnslag, avvistDag))
+            && (erLiktBegrunnet(sisteInnslag, avvistDag) || nesteErFridagEtterArbeidsdag(sisteInnslag, avvistDag))
         ) {
             sisteInnslag.tom = avvistDag.tom
-            return@fold akkumulator
-        }
-        akkumulator + avvistDag
+            akkumulator
+        } else akkumulator + avvistDag
     }
+
+private fun etterfølgerUtenGap(
+    sisteInnslag: VedtakMessage.AvvistPeriode,
+    avvistDag: VedtakMessage.AvvistPeriode,
+) = sisteInnslag.tom.plusDays(1) == avvistDag.tom
+
+private fun nesteErFridagEtterArbeidsdag(
+    sisteInnslag: VedtakMessage.AvvistPeriode,
+    avvistDag: VedtakMessage.AvvistPeriode,
+) = sisteInnslag.type == "Arbeidsdag" && avvistDag.type == "Fridag"
+
+private fun erLiktBegrunnet(
+    sisteInnslag: VedtakMessage.AvvistPeriode,
+    avvistDag: VedtakMessage.AvvistPeriode,
+) = sisteInnslag.type == avvistDag.type
+        && sisteInnslag.begrunnelser.containsAll(avvistDag.begrunnelser)
+        && avvistDag.begrunnelser.containsAll(sisteInnslag.begrunnelser)
